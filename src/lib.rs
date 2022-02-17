@@ -5,6 +5,9 @@
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod tests;
+
 /// The repetition state of a learnable item.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RepetitionState {
@@ -288,6 +291,7 @@ pub enum RepetitionResult {
 }
 
 /// The error type used by this crate.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Error {
     /// The configuration has no or not enough stages in the learning phase.
     /// The stages in the learning phase are defined by [Configuration::learning_phase_stage_delay_seconds].
