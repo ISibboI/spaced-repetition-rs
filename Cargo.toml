@@ -1,0 +1,13 @@
+[package]
+name = "spaced-repetition-rs"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-2-Clause"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+
+[dependencies]
+chrono = {version = "0.4.19", features = ["serde"]}
+serde = {version = "1.0.136", features = ["derive"]}

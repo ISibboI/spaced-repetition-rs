@@ -1,0 +1,104 @@
+name: Rust Tests and Lints
+
+on: [push, pull_request]
+
+jobs:
+  build_test_format_lint:
+    name: ${{matrix.command.name}} (${{matrix.toolchain}})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable]
+        command:
+          - name: Check
+            command: check
+            args: --all-features --all --all-targets
+          - name: Test
+            command: test
+            args: --all-features
+          - name: Format
+            command: fmt
+            args: -- --check
+          - name: Lint
+            command: clippy
+            args: --all-features --tests --benches -- -D clippy::all
+          - name: Doc
+            command: doc
+            args: --all-features --all
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          profile: minimal
+          override: true
+          default: true
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: ${{ runner.os }}-${{ matrix.command.name }}-${{ matrix.toolchain }}
+
+      - name: ${{matrix.command.name}}
+        uses: actions-rs/cargo@v1
+        with:
+          command: ${{matrix.command.command}}
+          args: ${{matrix.command.args}}
+
+  build_test_format_lint_optional:
+    name: ${{matrix.command.name}} (${{matrix.toolchain}}, optional)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [beta, nightly, 1.58.1]
+        command:
+          - name: Check
+            command: check
+            args: --all-features --all --all-targets
+          - name: Test
+            command: test
+            args: --all-features
+          - name: Test ignored
+            command: test
+            args: --all-features -- --ignored
+        include:
+          - toolchain: stable
+            command:
+              name: Test ignored
+              command: test
+              args: --all-features -- --ignored
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          profile: minimal
+          override: true
+          default: true
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v1
+        with:
+          key: ${{ runner.os }}-${{ matrix.command.name }}-${{ matrix.toolchain }}-optional
+
+      - name: ${{matrix.command.name}}
+        uses: actions-rs/cargo@v1
+        with:
+          command: ${{matrix.command.command}}
+          args: ${{matrix.command.args}}
