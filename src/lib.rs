@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 
 #[cfg(test)]
 mod tests;
@@ -224,38 +225,38 @@ impl Configuration {
             return Err(Error::ReviewingPhaseInitialEaseFactorLowerThanOne);
         }
 
-        if easy_count == 0 {
-            Ok(self.reviewing_phase_initial_ease_factor)
-        } else if easy_count > 0 {
-            let easy_count = easy_count.min(
-                self.reviewing_phase_initial_ease_max_easy_count
-                    .try_into()
-                    .map_err(|_| Error::Overflow)?,
-            );
-            if self.reviewing_phase_ease_factor_easy_update < 1.0 {
-                return Err(Error::ReviewingPhaseEaseFactorEasyUpdateLowerThanOne);
+        match easy_count.cmp(&0) {
+            Ordering::Equal => Ok(self.reviewing_phase_initial_ease_factor),
+            Ordering::Greater => {
+                let easy_count = easy_count.min(
+                    self.reviewing_phase_initial_ease_max_easy_count
+                        .try_into()
+                        .map_err(|_| Error::Overflow)?,
+                );
+                if self.reviewing_phase_ease_factor_easy_update < 1.0 {
+                    return Err(Error::ReviewingPhaseEaseFactorEasyUpdateLowerThanOne);
+                }
+                Ok((self.reviewing_phase_initial_ease_factor
+                    * self
+                        .reviewing_phase_ease_factor_easy_update
+                        .powi(easy_count.into()))
+                .min(self.reviewing_phase_max_ease_factor))
             }
-            Ok((self.reviewing_phase_initial_ease_factor
-                * self
-                    .reviewing_phase_ease_factor_easy_update
-                    .powi(easy_count.into()))
-            .min(self.reviewing_phase_max_ease_factor))
-        } else
-        /* easy_count < 0 */
-        {
-            let hard_count = easy_count.checked_mul(-1).ok_or(Error::Overflow)?.min(
-                self.reviewing_phase_initial_ease_max_hard_count
-                    .try_into()
-                    .map_err(|_| Error::Overflow)?,
-            );
-            if self.reviewing_phase_ease_factor_hard_update > 1.0 {
-                return Err(Error::ReviewingPhaseEaseFactorHardUpdateGreaterThanOne);
+            Ordering::Less => {
+                let hard_count = easy_count.checked_mul(-1).ok_or(Error::Overflow)?.min(
+                    self.reviewing_phase_initial_ease_max_hard_count
+                        .try_into()
+                        .map_err(|_| Error::Overflow)?,
+                );
+                if self.reviewing_phase_ease_factor_hard_update > 1.0 {
+                    return Err(Error::ReviewingPhaseEaseFactorHardUpdateGreaterThanOne);
+                }
+                Ok((self.reviewing_phase_initial_ease_factor
+                    * self
+                        .reviewing_phase_ease_factor_hard_update
+                        .powi(hard_count.into()))
+                .max(self.reviewing_phase_min_ease_factor))
             }
-            Ok((self.reviewing_phase_initial_ease_factor
-                * self
-                    .reviewing_phase_ease_factor_hard_update
-                    .powi(hard_count.into()))
-            .max(self.reviewing_phase_min_ease_factor))
         }
     }
 

@@ -53,7 +53,12 @@ fn update_unwrap(
     update(repetition_state, seconds, result, configuration).unwrap();
 }
 
-fn assert_learning(state: &RepetitionState, easy_count: i16, stage: u16, next_repetition_seconds: i64) {
+fn assert_learning(
+    state: &RepetitionState,
+    easy_count: i16,
+    stage: u16,
+    next_repetition_seconds: i64,
+) {
     match state {
         RepetitionState::Reviewing { .. } => panic!(),
 
@@ -69,14 +74,24 @@ fn assert_learning(state: &RepetitionState, easy_count: i16, stage: u16, next_re
     }
 }
 
-fn assert_reviewing(state: &RepetitionState, ease_factor: f64, last_repetition_seconds: i64, next_repetition_seconds: i64) {
+fn assert_reviewing(
+    state: &RepetitionState,
+    ease_factor: f64,
+    last_repetition_seconds: i64,
+    next_repetition_seconds: i64,
+) {
     match state {
-        RepetitionState::Reviewing { ease_factor: ease_factor_is, last_repetition: last_repetition_is, next_repetition: next_repetition_is } => {
+        RepetitionState::Reviewing {
+            ease_factor: ease_factor_is,
+            last_repetition: last_repetition_is,
+            next_repetition: next_repetition_is,
+        } => {
             assert!((ease_factor - *ease_factor_is).abs() < 1e-4);
             assert_eq!(*last_repetition_is, datetime(last_repetition_seconds));
             assert_eq!(*next_repetition_is, datetime(next_repetition_seconds));
         }
-        RepetitionState::Learning { .. } => panic!(),    }
+        RepetitionState::Learning { .. } => panic!(),
+    }
 }
 
 #[test]
