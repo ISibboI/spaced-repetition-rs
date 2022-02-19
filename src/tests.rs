@@ -67,9 +67,13 @@ fn assert_learning(
             stage: stage_is,
             next_repetition: next_repetition_is,
         } => {
-            assert_eq!(*easy_count_is, easy_count);
-            assert_eq!(*stage_is, stage);
-            assert_eq!(*next_repetition_is, datetime(next_repetition_seconds));
+            assert_eq!(*easy_count_is, easy_count, "Wrong easy count");
+            assert_eq!(*stage_is, stage, "Wrong stage");
+            assert_eq!(
+                *next_repetition_is,
+                datetime(next_repetition_seconds),
+                "Wrong next repetition"
+            );
         }
     }
 }
@@ -86,9 +90,20 @@ fn assert_reviewing(
             last_repetition: last_repetition_is,
             next_repetition: next_repetition_is,
         } => {
-            assert!((ease_factor - *ease_factor_is).abs() < 1e-4);
-            assert_eq!(*last_repetition_is, datetime(last_repetition_seconds));
-            assert_eq!(*next_repetition_is, datetime(next_repetition_seconds));
+            assert!(
+                (ease_factor - *ease_factor_is).abs() < 1e-4,
+                "Wrong ease factor"
+            );
+            assert_eq!(
+                *last_repetition_is,
+                datetime(last_repetition_seconds),
+                "Wrong last repetition"
+            );
+            assert_eq!(
+                *next_repetition_is,
+                datetime(next_repetition_seconds),
+                "Wrong next repetition"
+            );
         }
         RepetitionState::Learning { .. } => panic!(),
     }
@@ -113,4 +128,34 @@ fn test_learning_phase_normal() {
 
     update_unwrap(&mut state, 121, RepetitionResult::Normal, &configuration);
     assert_reviewing(&state, 2.5, 121, 721);
+}
+
+#[test]
+fn test_learning_phase_hard() {
+    let configuration = create_test_configuration();
+    let mut state = new();
+
+    update_unwrap(&mut state, 2, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 1, 12);
+
+    update_unwrap(&mut state, 14, RepetitionResult::Hard, &configuration);
+    assert_learning(&state, -1, 1, 24);
+
+    update_unwrap(&mut state, 25, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, -1, 2, 35);
+
+    update_unwrap(&mut state, 34, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, -1, 3, 54);
+
+    update_unwrap(&mut state, 60, RepetitionResult::Hard, &configuration);
+    assert_learning(&state, -2, 3, 80);
+
+    update_unwrap(&mut state, 121, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, -2, 4, 181);
+
+    update_unwrap(&mut state, 190, RepetitionResult::Hard, &configuration);
+    assert_learning(&state, -3, 4, 250);
+
+    update_unwrap(&mut state, 256, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5 / 1.15, 256, 778);
 }
