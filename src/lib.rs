@@ -165,7 +165,7 @@ impl RepetitionState {
                             })
                         } else {
                             let (delay_seconds, ease_factor) = configuration
-                                .reviewing_phase_initial_delay_seconds_and_ease_factor(
+                                .compute_reviewing_phase_initial_delay_seconds_and_ease_factor(
                                     easy_count,
                                 )?;
                             Ok(Self::Reviewing {
@@ -188,7 +188,7 @@ impl RepetitionState {
                                 ) >= configuration.learning_phase_stage_delay_seconds.len())
                         {
                             let (delay_seconds, ease_factor) = configuration
-                                .reviewing_phase_initial_delay_seconds_and_ease_factor(
+                                .compute_reviewing_phase_initial_delay_seconds_and_ease_factor(
                                     easy_count,
                                 )?;
                             Ok(Self::Reviewing {
@@ -285,7 +285,7 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    fn reviewing_phase_initial_ease_factor(&self, easy_count: i16) -> Result<f64, Error> {
+    fn compute_reviewing_phase_initial_ease_factor(&self, easy_count: i16) -> Result<f64, Error> {
         if self.reviewing_phase_initial_ease_factor < 1.0 {
             return Err(Error::ReviewingPhaseInitialEaseFactorLowerThanOne);
         }
@@ -325,11 +325,11 @@ impl Configuration {
         }
     }
 
-    fn reviewing_phase_initial_delay_seconds_and_ease_factor(
+    fn compute_reviewing_phase_initial_delay_seconds_and_ease_factor(
         &self,
         easy_count: i16,
     ) -> Result<(u32, f64), Error> {
-        let initial_ease_factor = self.reviewing_phase_initial_ease_factor(easy_count)?;
+        let initial_ease_factor = self.compute_reviewing_phase_initial_ease_factor(easy_count)?;
         let ease_ratio = initial_ease_factor / self.reviewing_phase_initial_ease_factor;
         let initial_delay_seconds =
             (f64::from(self.reviewing_phase_initial_delay_seconds) * ease_ratio).round();
