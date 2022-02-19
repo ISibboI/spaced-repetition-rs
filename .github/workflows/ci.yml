@@ -60,7 +60,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        toolchain: [beta, nightly, 1.58.1]
+        toolchain: [beta, nightly, 1.56.1]
         command:
           - name: Check
             command: check
