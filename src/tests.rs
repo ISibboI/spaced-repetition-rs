@@ -15,6 +15,9 @@ fn create_test_configuration() -> Configuration {
         reviewing_phase_initial_ease_max_hard_count: 1,
         reviewing_phase_ease_factor_easy_update: 1.15,
         reviewing_phase_ease_factor_hard_update: 1.0 / 1.15,
+        reviewing_phase_ease_factor_again_update: 1.0 / 1.2,
+        reviewing_phase_easy_one_time_interval_bonus: 1.5,
+        reviewing_phase_hard_fixed_interval_factor: Some(1.2),
     }
 }
 

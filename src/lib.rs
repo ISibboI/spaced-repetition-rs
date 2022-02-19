@@ -56,8 +56,62 @@ impl RepetitionState {
     ) -> Result<Self, Error> {
         let datetime = datetime.with_timezone(&Utc);
         match self {
-            RepetitionState::Reviewing { .. } => {
-                todo!()
+            RepetitionState::Reviewing {
+                ease_factor,
+                last_repetition,
+                next_repetition,
+            } => {
+                let ease_factor = match result {
+                    RepetitionResult::Again => {
+                        ease_factor * configuration.reviewing_phase_ease_factor_again_update
+                    }
+                    RepetitionResult::Hard => {
+                        ease_factor * configuration.reviewing_phase_ease_factor_hard_update
+                    }
+                    RepetitionResult::Normal => ease_factor,
+                    RepetitionResult::Easy => {
+                        ease_factor * configuration.reviewing_phase_ease_factor_easy_update
+                    }
+                }
+                .min(configuration.reviewing_phase_max_ease_factor)
+                .max(configuration.reviewing_phase_min_ease_factor);
+
+                let next_repetition = next_repetition.max(datetime);
+                let last_interval = next_repetition - last_repetition;
+                let last_interval_seconds = last_interval.num_seconds() as f64;
+
+                let next_interval_seconds = match result {
+                    RepetitionResult::Again => {
+                        configuration.reviewing_phase_initial_delay_seconds as f64 * ease_factor
+                            / configuration.reviewing_phase_initial_ease_factor
+                    }
+                    RepetitionResult::Hard => {
+                        if let Some(fixed_factor) =
+                            configuration.reviewing_phase_hard_fixed_interval_factor
+                        {
+                            last_interval_seconds * fixed_factor
+                        } else {
+                            last_interval_seconds * ease_factor
+                        }
+                    }
+                    RepetitionResult::Normal => last_interval_seconds * ease_factor,
+                    RepetitionResult::Easy => {
+                        last_interval_seconds
+                            * ease_factor
+                            * configuration.reviewing_phase_easy_one_time_interval_bonus
+                    }
+                };
+                // Add one percent because I am not totally sure how accurately i64 -> f64 conversion works.
+                if next_interval_seconds * 1.01 >= i64::MAX as f64 {
+                    return Err(Error::Overflow);
+                }
+                let next_interval = Duration::seconds(next_interval_seconds as i64);
+
+                Ok(Self::Reviewing {
+                    ease_factor,
+                    last_repetition: datetime,
+                    next_repetition: datetime + next_interval,
+                })
             }
             RepetitionState::Learning {
                 easy_count, stage, ..
@@ -217,6 +271,17 @@ pub struct Configuration {
 
     /// The factor applied to the ease factor on a hard result.
     pub reviewing_phase_ease_factor_hard_update: f64,
+
+    /// The factor applied to the ease factor on an again result.
+    pub reviewing_phase_ease_factor_again_update: f64,
+
+    /// A factor applied to the length of the learning interval on an easy answer, additionally to the ease factor.
+    /// This factor is applied only one an easy answer, and does not affect the update of the ease factor.
+    pub reviewing_phase_easy_one_time_interval_bonus: f64,
+
+    /// If set, the learning interval is updated by this exact factor on an hard answer, without accounting for the ease factor.
+    /// The ease factor is still updated in the background.
+    pub reviewing_phase_hard_fixed_interval_factor: Option<f64>,
 }
 
 impl Configuration {
