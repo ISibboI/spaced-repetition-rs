@@ -159,3 +159,21 @@ fn test_learning_phase_hard() {
     update_unwrap(&mut state, 256, RepetitionResult::Normal, &configuration);
     assert_reviewing(&state, 2.5 / 1.15, 256, 778);
 }
+
+#[test]
+fn test_learning_phase_easy() {
+    let configuration = create_test_configuration();
+    let mut state = new();
+
+    update_unwrap(&mut state, 2, RepetitionResult::Easy, &configuration);
+    assert_learning(&state, 1, 2, 12);
+
+    update_unwrap(&mut state, 13, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 1, 3, 33);
+
+    update_unwrap(&mut state, 36, RepetitionResult::Easy, &configuration);
+    assert_learning(&state, 2, 4, 96);
+
+    update_unwrap(&mut state, 100, RepetitionResult::Easy, &configuration);
+    assert_reviewing(&state, 2.5 * 1.15, 100, 790);
+}
