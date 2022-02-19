@@ -180,3 +180,39 @@ fn test_learning_phase_easy() {
     update_unwrap(&mut state, 100, RepetitionResult::Easy, &configuration);
     assert_reviewing(&state, 2.5 * 1.15, 100, 790);
 }
+
+#[test]
+fn test_reviewing_phase() {
+    let configuration = create_test_configuration();
+    let mut state = new();
+
+    update_unwrap(&mut state, 2, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 1, 12);
+
+    update_unwrap(&mut state, 14, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 2, 24);
+
+    update_unwrap(&mut state, 24, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 3, 44);
+
+    update_unwrap(&mut state, 60, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 4, 120);
+
+    update_unwrap(&mut state, 400, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 400, 1000);
+
+    update_unwrap(&mut state, 1000, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 1000, 2500);
+
+    update_unwrap(&mut state, 3000, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 3000, 8000);
+
+    update_unwrap(&mut state, 9000, RepetitionResult::Easy, &configuration);
+    assert_reviewing(&state, 2.5 * 1.15, 9000, 34875);
+
+    update_unwrap(&mut state, 35000, RepetitionResult::Again, &configuration);
+    assert_reviewing(&state, 2.5 * 1.15 / 1.2, 35000, 35575);
+
+    update_unwrap(&mut state, 36000, RepetitionResult::Hard, &configuration);
+    assert_reviewing(&state, 2.5 / 1.2, 36000, 37200);
+}
