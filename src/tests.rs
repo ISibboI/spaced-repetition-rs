@@ -1,4 +1,4 @@
-use crate::{Configuration, Error, RepetitionResult, RepetitionState};
+use crate::{Configuration, Error, Jitter, RepetitionResult, RepetitionState};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use std::mem;
 
@@ -7,6 +7,7 @@ fn create_test_configuration() -> Configuration {
         learning_phase_stage_delay_seconds: vec![10, 10, 20, 60],
         learning_phase_easy_skip_stages: 1,
         learning_phase_easy_may_skip_last_stage: false,
+        learning_phase_delay_jitter: Jitter::None,
         reviewing_phase_initial_delay_seconds: 600,
         reviewing_phase_initial_ease_factor: 2.5,
         reviewing_phase_min_ease_factor: 1.3,
@@ -18,6 +19,7 @@ fn create_test_configuration() -> Configuration {
         reviewing_phase_ease_factor_again_update: 1.0 / 1.2,
         reviewing_phase_easy_one_time_interval_bonus: 1.5,
         reviewing_phase_hard_fixed_interval_factor: Some(1.2),
+        reviewing_phase_delay_jitter: Jitter::None,
     }
 }
 

@@ -3,6 +3,10 @@
 #![warn(missing_docs)]
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use rand::Rng;
+use rand_distr::Distribution;
+use rand_distr::Normal;
+use rand_distr::Uniform;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -48,11 +52,26 @@ impl RepetitionState {
     /// Update the repetition state after an item was repeated by the user.
     /// The time of the repetition was `datetime`, and the result of the repetition was `result`.
     /// The configuration of the algorithm is given as `configuration`.
+    /// The source of randomness used for jitter is [rand::thread_rng].
     pub fn update<TZ: TimeZone>(
         self,
         datetime: DateTime<TZ>,
         result: RepetitionResult,
         configuration: &Configuration,
+    ) -> Result<Self, Error> {
+        self.update_with_rng(datetime, result, configuration, &mut rand::thread_rng())
+    }
+
+    /// Update the repetition state after an item was repeated by the user.
+    /// The time of the repetition was `datetime`, and the result of the repetition was `result`.
+    /// The configuration of the algorithm is given as `configuration`.
+    /// The given `rng` is the source of randomness used for jitter.
+    pub fn update_with_rng<TZ: TimeZone, RngType: Rng>(
+        self,
+        datetime: DateTime<TZ>,
+        result: RepetitionResult,
+        configuration: &Configuration,
+        rng: &mut RngType,
     ) -> Result<Self, Error> {
         let datetime = datetime.with_timezone(&Utc);
         match self {
@@ -101,6 +120,9 @@ impl RepetitionState {
                             * configuration.reviewing_phase_easy_one_time_interval_bonus
                     }
                 };
+                let next_interval_seconds = next_interval_seconds
+                    * configuration.reviewing_phase_delay_jitter.sample(rng)?;
+
                 // Add one percent because I am not totally sure how accurately i64 -> f64 conversion works.
                 if next_interval_seconds * 1.01 >= i64::MAX as f64 {
                     return Err(Error::Overflow);
@@ -127,7 +149,12 @@ impl RepetitionState {
                             Ok(Self::Learning {
                                 stage: 0,
                                 easy_count: easy_count.checked_sub(1).ok_or(Error::Overflow)?,
-                                next_repetition: datetime + Duration::seconds(delay_seconds.into()),
+                                next_repetition: datetime
+                                    + Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ),
                             })
                         } else {
                             Err(Error::ConfigurationMissesLearningStage)
@@ -143,7 +170,11 @@ impl RepetitionState {
                                 stage,
                                 easy_count: easy_count.checked_sub(1).ok_or(Error::Overflow)?,
                                 next_repetition: datetime
-                                    .checked_add_signed(Duration::seconds(delay_seconds.into()))
+                                    .checked_add_signed(Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ))
                                     .ok_or(Error::Overflow)?,
                             })
                         } else {
@@ -160,7 +191,11 @@ impl RepetitionState {
                                 stage: stage.checked_add(1).ok_or(Error::Overflow)?,
                                 easy_count,
                                 next_repetition: datetime
-                                    .checked_add_signed(Duration::seconds(delay_seconds.into()))
+                                    .checked_add_signed(Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ))
                                     .ok_or(Error::Overflow)?,
                             })
                         } else {
@@ -172,7 +207,11 @@ impl RepetitionState {
                                 ease_factor,
                                 last_repetition: datetime,
                                 next_repetition: datetime
-                                    .checked_add_signed(Duration::seconds(delay_seconds.into()))
+                                    .checked_add_signed(Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ))
                                     .ok_or(Error::Overflow)?,
                             })
                         }
@@ -195,7 +234,11 @@ impl RepetitionState {
                                 ease_factor,
                                 last_repetition: datetime,
                                 next_repetition: datetime
-                                    .checked_add_signed(Duration::seconds(delay_seconds.into()))
+                                    .checked_add_signed(Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ))
                                     .ok_or(Error::Overflow)?,
                             })
                         } else {
@@ -217,7 +260,11 @@ impl RepetitionState {
                                 stage: stage.checked_add(1).ok_or(Error::Overflow)?,
                                 easy_count: easy_count.checked_add(1).ok_or(Error::Overflow)?,
                                 next_repetition: datetime
-                                    .checked_add_signed(Duration::seconds(delay_seconds.into()))
+                                    .checked_add_signed(Duration::seconds(
+                                        configuration
+                                            .learning_phase_delay_jitter
+                                            .apply(rng, delay_seconds)?,
+                                    ))
                                     .ok_or(Error::Overflow)?,
                             })
                         }
@@ -247,6 +294,9 @@ pub struct Configuration {
     /// If true, if the user chooses easy in the learning phase and this would skip past the last stage, the item directly enters the reviewing phase.
     /// If false, then the item will always enter the last stage, and only after successfully repeating again the item may enter the reviewing phase.
     pub learning_phase_easy_may_skip_last_stage: bool,
+
+    /// A random variation of the delay during the learning phase.
+    pub learning_phase_delay_jitter: Jitter,
 
     /// The initial delay in the reviewing phase in seconds.
     pub reviewing_phase_initial_delay_seconds: u32,
@@ -282,6 +332,9 @@ pub struct Configuration {
     /// If set, the learning interval is updated by this exact factor on an hard answer, without accounting for the ease factor.
     /// The ease factor is still updated in the background.
     pub reviewing_phase_hard_fixed_interval_factor: Option<f64>,
+
+    /// A random variation of the delay during the reviewing phase.
+    pub reviewing_phase_delay_jitter: Jitter,
 }
 
 impl Configuration {
@@ -374,4 +427,73 @@ pub enum Error {
 
     /// An overflow occurred.
     Overflow,
+
+    /// The standard deviation given for the gaussian jitter variant is not accepted by [rand_distr::Normal].
+    IllegalJitterStandardDeviation,
+
+    /// An unexpected error in [rand_distr] occurred.
+    UnknownRandDistrError,
+}
+
+/// A random relative variation of a number.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum Jitter {
+    /// No jitter is applied.
+    /// The [Jitter::sample] method always returns `1.0` for this variant.
+    None,
+
+    /// Uniform jitter is applied.
+    /// The [Jitter::sample] methods samples from a uniform distribution with the given range.
+    Uniform {
+        /// The minimum of the range of the uniform distribution.
+        min: f64,
+        /// The maximum of the range of the uniform distribution.
+        max: f64,
+    },
+    /// Gaussian jitter is applied.
+    /// The [Jitter::sample] method samples from a gaussian (normal) distribution with mean `1.0` and given standard deviation.
+    Gaussian {
+        /// The standard deviation of the gaussian distribution.
+        standard_deviation: f64,
+    },
+}
+
+impl Default for Jitter {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl Jitter {
+    /// Sample from the jitter.
+    /// This yields a factor that can be multiplied to a number to add random variation.
+    pub fn sample<RngType: Rng>(&self, rng: &mut RngType) -> Result<f64, Error> {
+        Ok(match self {
+            Jitter::None => 1.0,
+            Jitter::Uniform { min, max } => Uniform::new(*min, *max).sample(rng),
+            Jitter::Gaussian { standard_deviation } => Normal::new(1.0, *standard_deviation)
+                .map_err(|error| match error {
+                    rand_distr::NormalError::BadVariance => Error::IllegalJitterStandardDeviation,
+                    _ => Error::UnknownRandDistrError,
+                })?
+                .sample(rng),
+        })
+    }
+
+    /// Apply random relative jitter to a number.
+    pub fn apply<RngType: Rng, DelayType: Into<f64>>(
+        &self,
+        rng: &mut RngType,
+        delay: DelayType,
+    ) -> Result<i64, Error> {
+        let jitter = self.sample(rng)?;
+        let delay = (jitter * delay.into()).round();
+
+        // Add one percent because I am not totally sure how accurately i64 -> f64 conversion works.
+        if delay * 1.01 >= i64::MAX as f64 {
+            return Err(Error::Overflow);
+        }
+
+        Ok(delay as i64)
+    }
 }
