@@ -1,5 +1,7 @@
 use crate::{Configuration, Error, Jitter, RepetitionResult, RepetitionState};
 use chrono::{DateTime, Duration, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha12Rng;
 use std::mem;
 
 fn create_test_configuration() -> Configuration {
@@ -56,6 +58,29 @@ fn update_unwrap(
     configuration: &Configuration,
 ) {
     update(repetition_state, seconds, result, configuration).unwrap();
+}
+
+fn update_with_rng<RngType: Rng>(
+    state: &mut RepetitionState,
+    seconds: i64,
+    result: RepetitionResult,
+    configuration: &Configuration,
+    rng: &mut RngType,
+) -> Result<(), Error> {
+    let mut tmp_state = new();
+    mem::swap(&mut tmp_state, state);
+    *state = tmp_state.update_with_rng(datetime(seconds), result, configuration, rng)?;
+    Ok(())
+}
+
+fn update_with_rng_unwrap<RngType: Rng>(
+    repetition_state: &mut RepetitionState,
+    seconds: i64,
+    result: RepetitionResult,
+    configuration: &Configuration,
+    rng: &mut RngType,
+) {
+    update_with_rng(repetition_state, seconds, result, configuration, rng).unwrap();
 }
 
 fn assert_learning(
@@ -217,4 +242,108 @@ fn test_reviewing_phase() {
 
     update_unwrap(&mut state, 36000, RepetitionResult::Hard, &configuration);
     assert_reviewing(&state, 2.5 / 1.2, 36000, 37200);
+}
+
+#[test]
+fn test_jitter() {
+    let mut configuration = create_test_configuration();
+    configuration.learning_phase_delay_jitter = Jitter::Gaussian {
+        standard_deviation: 0.05,
+    };
+    configuration.reviewing_phase_delay_jitter = Jitter::Gaussian {
+        standard_deviation: 0.05,
+    };
+    let mut state = new();
+    // Use a fixed rng algorithm and seed to prevent this test from breaking in the future.
+    let mut rng = ChaCha12Rng::seed_from_u64(0);
+
+    update_with_rng_unwrap(
+        &mut state,
+        2,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_learning(&state, 0, 1, 12);
+
+    update_with_rng_unwrap(
+        &mut state,
+        14,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_learning(&state, 0, 2, 24);
+
+    update_with_rng_unwrap(
+        &mut state,
+        24,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_learning(&state, 0, 3, 42);
+
+    update_with_rng_unwrap(
+        &mut state,
+        60,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_learning(&state, 0, 4, 120);
+
+    update_with_rng_unwrap(
+        &mut state,
+        400,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5, 400, 962);
+
+    update_with_rng_unwrap(
+        &mut state,
+        1000,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5, 1000, 2596);
+
+    update_with_rng_unwrap(
+        &mut state,
+        3000,
+        RepetitionResult::Normal,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5, 3000, 7629);
+
+    update_with_rng_unwrap(
+        &mut state,
+        9000,
+        RepetitionResult::Easy,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5 * 1.15, 9000, 35667);
+
+    update_with_rng_unwrap(
+        &mut state,
+        35000,
+        RepetitionResult::Again,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5 * 1.15 / 1.2, 35000, 35592);
+
+    update_with_rng_unwrap(
+        &mut state,
+        36000,
+        RepetitionResult::Hard,
+        &configuration,
+        &mut rng,
+    );
+    assert_reviewing(&state, 2.5 / 1.2, 36000, 37304);
 }
