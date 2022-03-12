@@ -80,6 +80,15 @@ impl RepetitionState {
                 last_repetition,
                 next_repetition,
             } => {
+                if datetime < last_repetition {
+                    return Err(Error::NegativeRepetitionInterval);
+                }
+
+                let last_planned_interval = next_repetition - last_repetition;
+                let last_planned_interval_seconds = last_planned_interval.num_seconds() as f64;
+                let last_real_interval = datetime - last_repetition;
+                let last_real_interval_seconds = last_real_interval.num_seconds() as f64;
+
                 let ease_factor = match result {
                     RepetitionResult::Again => {
                         ease_factor * configuration.reviewing_phase_ease_factor_again_update
@@ -89,15 +98,21 @@ impl RepetitionState {
                     }
                     RepetitionResult::Normal => ease_factor,
                     RepetitionResult::Easy => {
-                        ease_factor * configuration.reviewing_phase_ease_factor_easy_update
+                        if last_real_interval_seconds < last_planned_interval_seconds {
+                            // If the real interval was shorter than the planned one, do not update the ease factor as much.
+                            let interpolation_factor =
+                                last_real_interval_seconds / last_planned_interval_seconds;
+                            ease_factor
+                                * (configuration.reviewing_phase_ease_factor_easy_update
+                                    * interpolation_factor
+                                    + (1.0 - interpolation_factor))
+                        } else {
+                            ease_factor * configuration.reviewing_phase_ease_factor_easy_update
+                        }
                     }
                 }
                 .min(configuration.reviewing_phase_max_ease_factor)
                 .max(configuration.reviewing_phase_min_ease_factor);
-
-                let next_repetition = next_repetition.max(datetime);
-                let last_interval = next_repetition - last_repetition;
-                let last_interval_seconds = last_interval.num_seconds() as f64;
 
                 let next_interval_seconds = match result {
                     RepetitionResult::Again => {
@@ -108,16 +123,31 @@ impl RepetitionState {
                         if let Some(fixed_factor) =
                             configuration.reviewing_phase_hard_fixed_interval_factor
                         {
-                            last_interval_seconds * fixed_factor
+                            last_real_interval_seconds * fixed_factor
                         } else {
-                            last_interval_seconds * ease_factor
+                            last_real_interval_seconds * ease_factor
                         }
                     }
-                    RepetitionResult::Normal => last_interval_seconds * ease_factor,
+                    RepetitionResult::Normal => {
+                        if last_real_interval_seconds < last_planned_interval_seconds {
+                            // Do not apply ease to the part of the interval that was planned, but not waited out.
+                            last_real_interval_seconds * ease_factor
+                                + (last_planned_interval_seconds - last_real_interval_seconds)
+                        } else {
+                            last_real_interval_seconds * ease_factor
+                        }
+                    }
                     RepetitionResult::Easy => {
-                        last_interval_seconds
-                            * ease_factor
-                            * configuration.reviewing_phase_easy_one_time_interval_bonus
+                        if last_real_interval_seconds < last_planned_interval_seconds {
+                            // Do not apply ease to the part of the interval that was planned, but not waited out.
+                            (last_real_interval_seconds * ease_factor
+                                + (last_planned_interval_seconds - last_real_interval_seconds))
+                                * configuration.reviewing_phase_easy_one_time_interval_bonus
+                        } else {
+                            last_real_interval_seconds
+                                * ease_factor
+                                * configuration.reviewing_phase_easy_one_time_interval_bonus
+                        }
                     }
                 };
                 let next_interval_seconds = next_interval_seconds
@@ -433,6 +463,9 @@ pub enum Error {
 
     /// An unexpected error in [rand_distr] occurred.
     UnknownRandDistrError,
+
+    /// An item was repeated before its previous repetition.
+    NegativeRepetitionInterval,
 }
 
 /// A random relative variation of a number.
