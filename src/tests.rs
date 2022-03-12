@@ -25,14 +25,22 @@ fn create_test_configuration() -> Configuration {
     }
 }
 
-fn datetime(seconds: i64) -> DateTime<Utc> {
+fn base_datetime() -> DateTime<Utc> {
     DateTime::<Utc>::from_utc(
         NaiveDateTime::new(
             NaiveDate::from_ymd(2000, 1, 1),
             NaiveTime::from_hms(1, 0, 0),
         ),
         Utc,
-    ) + Duration::seconds(seconds)
+    )
+}
+
+fn datetime(seconds: i64) -> DateTime<Utc> {
+    base_datetime() + Duration::seconds(seconds)
+}
+
+fn seconds(datetime: &DateTime<Utc>) -> i64 {
+    (*datetime - base_datetime()).num_seconds()
 }
 
 fn new() -> RepetitionState {
@@ -122,17 +130,19 @@ fn assert_reviewing(
         } => {
             assert!(
                 (ease_factor - *ease_factor_is).abs() < 1e-4,
-                "Wrong ease factor"
+                "Wrong ease factor: should be {ease_factor}, but is {ease_factor_is}"
             );
+            let last_repetition_is_seconds = seconds(last_repetition_is);
             assert_eq!(
                 *last_repetition_is,
                 datetime(last_repetition_seconds),
-                "Wrong last repetition"
+                "Wrong last repetition: should be {last_repetition_seconds}, but is {last_repetition_is_seconds}"
             );
+            let next_repetition_is_seconds = seconds(next_repetition_is);
             assert_eq!(
                 *next_repetition_is,
                 datetime(next_repetition_seconds),
-                "Wrong next repetition"
+                "Wrong next repetition: should be {next_repetition_seconds}, but is {next_repetition_is_seconds}"
             );
         }
         RepetitionState::Learning { .. } => panic!(),
@@ -346,4 +356,40 @@ fn test_jitter() {
         &mut rng,
     );
     assert_reviewing(&state, 2.5 / 1.2, 36000, 37304);
+}
+
+#[test]
+fn test_early_repetitions() {
+    let configuration = create_test_configuration();
+    let mut state = new();
+
+    update_unwrap(&mut state, 2, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 1, 12);
+
+    update_unwrap(&mut state, 10, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 2, 20);
+
+    update_unwrap(&mut state, 15, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 3, 35);
+
+    update_unwrap(&mut state, 30, RepetitionResult::Normal, &configuration);
+    assert_learning(&state, 0, 4, 90);
+
+    update_unwrap(&mut state, 80, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 80, 680);
+
+    update_unwrap(&mut state, 380, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 380, 1430);
+
+    update_unwrap(&mut state, 1000, RepetitionResult::Normal, &configuration);
+    assert_reviewing(&state, 2.5, 1000, 2980);
+
+    update_unwrap(&mut state, 1990, RepetitionResult::Easy, &configuration);
+    assert_reviewing(&state, 2.5 * 1.075, 1990, 7465);
+
+    update_unwrap(&mut state, 5000, RepetitionResult::Again, &configuration);
+    assert_reviewing(&state, 2.5 * 1.075 / 1.2, 5000, 5537);
+
+    update_unwrap(&mut state, 5500, RepetitionResult::Hard, &configuration);
+    assert_reviewing(&state, 2.5 * 1.075 / 1.2 / 1.15, 5500, 6100);
 }
