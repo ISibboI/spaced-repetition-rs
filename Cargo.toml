@@ -8,15 +8,18 @@ repository = "https://github.com/ISibboI/spaced-repetition-rs"
 license = "BSD-2-Clause"
 keywords = ["spaced", "repetition", "anki", "supermemo", "learn"]
 categories = ["algorithms"]
-rust-version = "1.58.1"
+rust-version = "1.60.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
 
+[features]
+serde = ["dep:serde", "chrono/serde"]
+
 [dependencies]
-chrono = {version = "0.4.19", features = ["serde"]}
-serde = {version = "1.0.136", features = ["derive"]}
+chrono = {version = "0.4.19"}
+serde = {version = "1.0.136", optional = true, features = ["derive"]}
 rand = "0.8.5"
 rand_distr = "0.4.3"
 
