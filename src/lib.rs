@@ -7,6 +7,7 @@ use rand::Rng;
 use rand_distr::Distribution;
 use rand_distr::Normal;
 use rand_distr::Uniform;
+#[cfg(serde)]
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
@@ -14,7 +15,8 @@ use std::cmp::Ordering;
 mod tests;
 
 /// The repetition state of a learnable item.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(serde, derive(Serialize, Deserialize))]
 pub enum RepetitionState {
     /// The item has made it through the initial learning phase and will now be repeated at larger intervals.
     Reviewing {
@@ -306,7 +308,8 @@ impl RepetitionState {
 }
 
 /// The configuration of the algorithm.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(serde, derive(Serialize, Deserialize))]
 pub struct Configuration {
     /// The delays between repetitions in the initial learning phase.
     /// These are given as seconds.
@@ -427,7 +430,8 @@ impl Configuration {
 }
 
 /// The result of a repetition as specified by the user.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(serde, derive(Serialize, Deserialize))]
 pub enum RepetitionResult {
     /// The user was not able to repeat the item.
     Again,
@@ -469,10 +473,11 @@ pub enum Error {
 }
 
 /// A random relative variation of a number.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(serde, derive(Serialize, Deserialize))]
 pub enum Jitter {
     /// No jitter is applied.
-    /// The [Jitter::sample] method always returns `1.0` for this variant.
+    /// The method [Jitter::sample] always returns `1.0` for this variant.
     None,
 
     /// Uniform jitter is applied.

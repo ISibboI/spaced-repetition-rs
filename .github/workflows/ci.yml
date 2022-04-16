@@ -12,9 +12,12 @@ jobs:
       matrix:
         toolchain: [stable]
         command:
-          - name: Check
+          - name: Check [all]
             command: check
             args: --all-features --all --all-targets
+          - name: Check [default]
+            command: check
+            args: --all --all-targets
           - name: Test
             command: test
             args: --all-features
@@ -62,9 +65,12 @@ jobs:
       matrix:
         toolchain: [beta, nightly, 1.58.1]
         command:
-          - name: Check
+          - name: Check [all]
             command: check
             args: --all-features --all --all-targets
+          - name: Check [default]
+            command: check
+            args: --all --all-targets
           - name: Test
             command: test
             args: --all-features
